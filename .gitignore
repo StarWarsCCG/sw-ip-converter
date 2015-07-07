@@ -26,3 +26,9 @@
 *.exe
 *.out
 *.app
+*.bin
+
+# Database
+*.sqlite
+*.sql
+
