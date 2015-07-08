@@ -1,7 +1,6 @@
 #include <sqlite3.h>
 #include <iostream>
 #include <fstream>
-#include <unordered_map>
 #include <string>
 #include <cstring>
 using namespace std;
@@ -156,7 +155,6 @@ int main(int argc, char** argv)
             {
                 cout << "prepared statement" << endl;
 
-                unordered_map<string, int> columnIndicesByName;
                 int columnCount = sqlite3_column_count(statement);
                 for (int i = 0; i < columnCount; ++i)
                 {
@@ -165,8 +163,6 @@ int main(int argc, char** argv)
                     if (i > 0) fout << ',';
 
                     fout << "\n  \"" << name << "\" text";
-
-                    columnIndicesByName[name] = i;
                 }
 
                 fout << "\n);\n";
