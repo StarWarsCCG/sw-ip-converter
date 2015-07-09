@@ -137,12 +137,13 @@ string Sanitized(const char* text)
 
 int main(int argc, char** argv)
 {
-    ofstream fout("swccg.sql", ofstream::binary);
+    ofstream sql("swccg.postgres.sql", ofstream::binary);
+    ofstream code("swccg.cpp.txt", ofstream::binary);
     sqlite3* db = nullptr;
 
-    if (fout)
+    if (sql)
     {
-        fout << "CREATE TABLE \"legacy_card_info\" (";
+        sql << "CREATE TABLE \"legacy_card_info\" (";
 
         if (sqlite3_open("swccg_db.sqlite", &db) == SQLITE_OK)
         {
@@ -154,61 +155,69 @@ int main(int argc, char** argv)
                 db, "SELECT * FROM swd", -1, &statement, nullptr) == SQLITE_OK)
             {
                 cout << "prepared statement" << endl;
+                
+                code << "struct ColumnMapping\n{";
 
                 int columnCount = sqlite3_column_count(statement);
                 for (int i = 0; i < columnCount; ++i)
                 {
-                    auto name = sqlite3_column_name(statement, i);
+                    auto columnName = sqlite3_column_name(statement, i);
 
-                    if (i > 0) fout << ',';
+                    if (i > 0) sql << ',';
 
-                    fout << "\n  \"" << name << "\" text";
+                    sql << "\n  \"" << columnName << "\" text";
+                    code << "\n    int " << columnName << " = -1;";
                 }
+                
+                code << "\n};\n\n";
 
-                fout << "\n);\n";
-
-                fout << "\nINSERT INTO \"legacy_card_info\" (";
+                sql << "\n);\n\nINSERT INTO \"legacy_card_info\" (";
 
                 for (int i = 0; i < columnCount; ++i)
                 {
-                    if (i > 0) fout << ", ";
+                    if (i > 0) sql << ", ";
+                    
+                    auto columnName = sqlite3_column_name(statement, i);
 
-                    fout << '"'
-                        << sqlite3_column_name(statement, i)
-                        << '"';
+                    sql << '"' << columnName << '"';
+                    code << "else if (!strcmp(columnName, \""
+                        << columnName
+                        << "\"))\n    columnMapping."
+                        << columnName
+                        << " = i;\n";
                 }
 
-                fout << ") VALUES";
+                sql << ") VALUES";
 
                 int rowCount = 0;
 
                 while (sqlite3_step(statement) == SQLITE_ROW)
                 {
-                    if (rowCount++ > 0) fout << ",";
+                    if (rowCount++ > 0) sql << ",";
 
-                    fout << "\n  (";
+                    sql << "\n  (";
 
                     for (int i = 0; i < columnCount; ++i)
                     {
-                        if (i > 0) fout << ", ";
+                        if (i > 0) sql << ", ";
 
                         const char* text = (const char*)sqlite3_column_text(
                             statement, i);
 
                         if (HasText(text))
                         {
-                            fout << "'" << Sanitized(text) << "'";
+                            sql << "'" << Sanitized(text) << "'";
                         }
                         else
                         {
-                            fout << "NULL";
+                            sql << "NULL";
                         }
                     }
 
-                    fout << ")";
+                    sql << ")";
                 }
 
-                fout << ";\n";
+                sql << ";\n";
 
                 sqlite3_finalize(statement);
                 statement = nullptr;
@@ -218,7 +227,8 @@ int main(int argc, char** argv)
             db = nullptr;
         }
 
-        fout.close();
+        code.close();
+        sql.close();
     }
 
     return 0;
