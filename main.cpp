@@ -12,7 +12,7 @@ const char DownTriangle[] = { (char)0xe2, (char)0x96, (char)0xbc, 0x00 };
 const char UpTriangle[] = { (char)0xe2, (char)0x96, (char)0xb2, 0x00 };
 const char Dot[] = { (char)0xe2, (char)0x80, (char)0xa2, 0x00 };
 const char Diamond[] = { (char)0xe2, (char)0x99, (char)0xa2, 0x00 };
-const auto Quote = "''";
+const auto Quote = "'";
 
 inline bool IsAlphanumeric(char c)
 {
@@ -139,11 +139,13 @@ int main(int argc, char** argv)
 {
     ofstream sql("swccg.postgres.sql", ofstream::binary);
     ofstream code("swccg.cpp.txt", ofstream::binary);
+    ofstream json("swccg.json", ofstream::binary);
     sqlite3* db = nullptr;
 
-    if (sql)
+    if (sql && code && json)
     {
         sql << "CREATE TABLE \"legacy_card_info\" (";
+        json << "[";
 
         if (sqlite3_open("swccg_db.sqlite", &db) == SQLITE_OK)
         {
@@ -155,8 +157,6 @@ int main(int argc, char** argv)
                 db, "SELECT * FROM swd", -1, &statement, nullptr) == SQLITE_OK)
             {
                 cout << "prepared statement" << endl;
-                
-                code << "struct ColumnMapping\n{";
 
                 int columnCount = sqlite3_column_count(statement);
                 for (int i = 0; i < columnCount; ++i)
@@ -166,10 +166,14 @@ int main(int argc, char** argv)
                     if (i > 0) sql << ',';
 
                     sql << "\n  \"" << columnName << "\" text";
-                    code << "\n    int " << columnName << " = -1;";
+                    code << "\nconst int CM_"
+                        << columnName
+                        << " = "
+                        << i
+                        << ";";
                 }
                 
-                code << "\n};\n\n";
+                code << "\n\n";
 
                 sql << "\n);\n\nINSERT INTO \"legacy_card_info\" (";
 
@@ -180,11 +184,6 @@ int main(int argc, char** argv)
                     auto columnName = sqlite3_column_name(statement, i);
 
                     sql << '"' << columnName << '"';
-                    code << "else if (!strcmp(columnName, \""
-                        << columnName
-                        << "\"))\n    columnMapping."
-                        << columnName
-                        << " = i;\n";
                 }
 
                 sql << ") VALUES";
@@ -193,20 +192,57 @@ int main(int argc, char** argv)
 
                 while (sqlite3_step(statement) == SQLITE_ROW)
                 {
-                    if (rowCount++ > 0) sql << ",";
+                    if (rowCount++ > 0)
+                    {
+                        sql << ",";
+                        json << ",";
+                    }
 
                     sql << "\n  (";
+                    json << "\n  {";
+                    
+                    bool writeComma = false;
 
                     for (int i = 0; i < columnCount; ++i)
                     {
                         if (i > 0) sql << ", ";
+                        if (writeComma) json << ",";
+                        
+                        writeComma = false;
 
-                        const char* text = (const char*)sqlite3_column_text(
-                            statement, i);
+                        auto text = (const char*)
+                            sqlite3_column_text(statement, i);
 
                         if (HasText(text))
                         {
-                            sql << "'" << Sanitized(text) << "'";
+                            auto columnName = sqlite3_column_name(statement, i);
+                            auto sanitized = Sanitized(text);
+                            
+                            sql << "'";
+                            json << "\n    \""
+                                << columnName
+                                << "\": \"";
+                               
+                            writeComma = true;
+                                
+                            for (auto c : sanitized)
+                            {
+                                if (c == '\'')
+                                    sql << "''";
+                                else
+                                    sql << c;
+                                
+                                if (c == '"')
+                                    json << "\\\"";
+                                else if (c == '\n')
+                                    json << "\\n";
+                                else
+                                    json << c;
+                            }
+                            
+                            sql << "'";
+                            json << "\"";
+                            
                         }
                         else
                         {
@@ -215,9 +251,12 @@ int main(int argc, char** argv)
                     }
 
                     sql << ")";
+                    json << "\n  }";
                 }
 
                 sql << ";\n";
+                
+                cout << "read " << rowCount << " rows" << endl;
 
                 sqlite3_finalize(statement);
                 statement = nullptr;
@@ -226,7 +265,10 @@ int main(int argc, char** argv)
             sqlite3_close(db);
             db = nullptr;
         }
+        
+        json << "]\n";
 
+        json.close();
         code.close();
         sql.close();
     }

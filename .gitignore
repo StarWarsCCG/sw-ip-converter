@@ -31,8 +31,9 @@
 # Database
 *.sqlite
 *.sdb
-*.sql
 
 # Output
+*.sql
 *.txt
+*.json
 
