@@ -135,14 +135,55 @@ string Sanitized(const char* text)
     return move(result);
 }
 
+string FixCardName(const char* text)
+{
+    string sanitized = Sanitized(text);
+    
+    string result;
+    
+    for (auto i = sanitized.c_str(); *i; ++i)
+    {
+        auto c = *i;
+        
+        if ('A' <= c && c <= 'Z')
+            c += 32;
+        
+        if (('a' <= c && c <= 'z') || ('0' <= c && c <= '9') || c == '&')
+            result += c;
+        else if (c == '(' && i[1] == 'V' && i[2] == ')')
+            i += 2;
+    }
+    
+    if (result.size() > 15 &&
+        !memcmp(result.c_str() + result.size() - 15, "defensiveshield", 15))
+    {
+        result = result.substr(0, result.size() - 15);
+    }
+    
+    return move(result);
+}
+
+string FixExpansion(const char* text)
+{
+    string result;
+    
+    for (auto i = text; *i; ++i)
+    {
+        if (IsAlphanumeric(*i)) result += *i;
+    }
+    
+    return move(result);
+}
+
 int main(int argc, char** argv)
 {
     ofstream sql("swccg.postgres.sql", ofstream::binary);
     ofstream code("swccg.cpp.txt", ofstream::binary);
     ofstream json("swccg.json", ofstream::binary);
+    ofstream script("rename-cards.sh", ofstream::binary);
     sqlite3* db = nullptr;
 
-    if (sql && code && json)
+    if (sql && code && json && script)
     {
         sql << "CREATE TABLE \"legacy_card_info\" (";
         json << "[";
@@ -201,14 +242,47 @@ int main(int argc, char** argv)
                     sql << "\n  (";
                     json << "\n  {";
                     
+                    auto addScript = [&](
+                        const char* expansion,
+                        const char* group,
+                        const char* name,
+                        const char* id,
+                        const char* idSuffix)
+                    {
+                        script
+                            << "cp -n \"cards/starwars/"
+                            << expansion
+                            << "-"
+                            << group
+                            << "/large/"
+                            << name
+                            << ".gif\" cards/unified/"
+                            << id
+                            << idSuffix
+                            << ".gif\n";
+                    };
+                    
+                    auto cardType = (const char*)
+                        sqlite3_column_text(statement, 3);
+                    
+                    auto cardName = FixCardName((const char*)
+                        sqlite3_column_text(statement, 1));
+                    
+                    auto expansion = FixExpansion(
+                        (const char*)sqlite3_column_text(statement, 6));
+                        
+                    addScript(
+                        expansion.c_str(),
+                        (const char*)sqlite3_column_text(statement, 2),
+                        cardName.c_str(),
+                        (const char*)sqlite3_column_text(statement, 0),
+                        "");
+                    
                     bool writeComma = false;
 
                     for (int i = 0; i < columnCount; ++i)
                     {
                         if (i > 0) sql << ", ";
-                        if (writeComma) json << ",";
-                        
-                        writeComma = false;
 
                         auto text = (const char*)
                             sqlite3_column_text(statement, i);
@@ -219,6 +293,9 @@ int main(int argc, char** argv)
                             auto sanitized = Sanitized(text);
                             
                             sql << "'";
+                            
+                            if (writeComma) json << ",";
+                            
                             json << "\n    \""
                                 << columnName
                                 << "\": \"";
@@ -268,6 +345,7 @@ int main(int argc, char** argv)
         
         json << "]\n";
 
+        script.close();
         json.close();
         code.close();
         sql.close();
