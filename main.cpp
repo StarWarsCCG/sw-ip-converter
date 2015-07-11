@@ -160,6 +160,12 @@ string FixCardName(const char* text)
         result = result.substr(0, result.size() - 15);
     }
     
+    if (result.size() > 3 &&
+        !memcmp(result.c_str() + result.size() - 3, "ep1", 3))
+    {
+        result = result.substr(0, result.size() - 3);
+    }
+    
     return move(result);
 }
 
@@ -265,18 +271,46 @@ int main(int argc, char** argv)
                     auto cardType = (const char*)
                         sqlite3_column_text(statement, 3);
                     
-                    auto cardName = FixCardName((const char*)
-                        sqlite3_column_text(statement, 1));
-                    
                     auto expansion = FixExpansion(
                         (const char*)sqlite3_column_text(statement, 6));
+                    
+                    auto group = (const char*)sqlite3_column_text(statement, 2);
+                    auto id = (const char*)sqlite3_column_text(statement, 0);
                         
-                    addScript(
-                        expansion.c_str(),
-                        (const char*)sqlite3_column_text(statement, 2),
-                        cardName.c_str(),
-                        (const char*)sqlite3_column_text(statement, 0),
-                        "");
+                    if (strcmp(cardType, "Objective"))
+                    {
+                        auto cardName = FixCardName((const char*)
+                            sqlite3_column_text(statement, 1));
+                    
+                        addScript(
+                            expansion.c_str(),
+                            group,
+                            cardName.c_str(),
+                            id,
+                            "");
+                    }
+                    else
+                    {
+                        auto cardName = FixCardName((const char*)
+                            sqlite3_column_text(statement, 17));
+                    
+                        addScript(
+                            expansion.c_str(),
+                            group,
+                            cardName.c_str(),
+                            id,
+                            "a");
+                        
+                        cardName = FixCardName((const char*)
+                            sqlite3_column_text(statement, 18));
+                        
+                        addScript(
+                            expansion.c_str(),
+                            group,
+                            cardName.c_str(),
+                            id,
+                            "b");
+                    }
                     
                     bool writeComma = false;
 
