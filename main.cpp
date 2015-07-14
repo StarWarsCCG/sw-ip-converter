@@ -26,6 +26,29 @@ inline bool HasText(const char* text)
     return text && *text;
 }
 
+string FixColumn(const char* text)
+{
+    string result;
+    
+    for (auto i = text; *i; ++i)
+    {
+        auto c = *i;
+        
+        if ('A' <= c && c <= 'Z')
+        {
+            if (result.size() > 0) result += '_';
+            
+            result += c + 32;
+        }
+        else
+        {
+            result += c;
+        }
+    }
+    
+    return result;
+}
+
 string Sanitized(const char* text)
 {
     string result;
@@ -201,14 +224,15 @@ int main(int argc, char** argv)
             sqlite3_stmt* statement = nullptr;
 
             if (sqlite3_prepare(
-                db, "SELECT * FROM swd", -1, &statement, nullptr) == SQLITE_OK)
+                db, "SELECT * FROM swd WHERE Expansion LIKE 'Virtual Card Set #2'", -1, &statement, nullptr) == SQLITE_OK)
             {
                 cout << "prepared statement" << endl;
 
                 int columnCount = sqlite3_column_count(statement);
                 for (int i = 0; i < columnCount; ++i)
                 {
-                    auto columnName = sqlite3_column_name(statement, i);
+                    auto columnName = FixColumn(
+                        sqlite3_column_name(statement, i));
 
                     if (i > 0) sql << ',';
 
@@ -228,7 +252,8 @@ int main(int argc, char** argv)
                 {
                     if (i > 0) sql << ", ";
                     
-                    auto columnName = sqlite3_column_name(statement, i);
+                    auto columnName = FixColumn(
+                        sqlite3_column_name(statement, i));
 
                     sql << '"' << columnName << '"';
                 }
