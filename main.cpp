@@ -123,6 +123,7 @@ string Sanitized(const char* text)
             case 13: break;
             case 133: result += "..."; break;
             case 146: result += Quote; break;
+            case 147:
             case 148: result += '"'; break;
             case 180: result += Quote; break;
             case 188: result += OneQuarter; break;
@@ -138,46 +139,46 @@ string Sanitized(const char* text)
 string FixCardName(const char* text)
 {
     string sanitized = Sanitized(text);
-    
+
     string result;
-    
+
     for (auto i = sanitized.c_str(); *i; ++i)
     {
         auto c = *i;
-        
+
         if ('A' <= c && c <= 'Z')
             c += 32;
-        
+
         if (('a' <= c && c <= 'z') || ('0' <= c && c <= '9') || c == '&')
             result += c;
         else if (c == '(' && i[1] == 'V' && i[2] == ')')
             i += 2;
     }
-    
+
     if (result.size() > 15 &&
         !memcmp(result.c_str() + result.size() - 15, "defensiveshield", 15))
     {
         result = result.substr(0, result.size() - 15);
     }
-    
+
     if (result.size() > 3 &&
         !memcmp(result.c_str() + result.size() - 3, "ep1", 3))
     {
         result = result.substr(0, result.size() - 3);
     }
-    
+
     return move(result);
 }
 
 string FixExpansion(const char* text)
 {
     string result;
-    
+
     for (auto i = text; *i; ++i)
     {
         if (IsAlphanumeric(*i)) result += *i;
     }
-    
+
     return move(result);
 }
 
@@ -219,7 +220,7 @@ int main(int argc, char** argv)
                         << i
                         << ";";
                 }
-                
+
                 code << "\n\n";
 
                 sql << "\n);\n\nINSERT INTO \"legacy_card_info\" (";
@@ -227,7 +228,7 @@ int main(int argc, char** argv)
                 for (int i = 0; i < columnCount; ++i)
                 {
                     if (i > 0) sql << ", ";
-                    
+
                     auto columnName = sqlite3_column_name(statement, i);
 
                     sql << '"' << columnName << '"';
@@ -247,7 +248,7 @@ int main(int argc, char** argv)
 
                     sql << "\n  (";
                     json << "\n  {";
-                    
+
                     auto addScript = [&](
                         const char* expansion,
                         const char* group,
@@ -267,21 +268,21 @@ int main(int argc, char** argv)
                             << idSuffix
                             << ".gif\n";
                     };
-                    
+
                     auto cardType = (const char*)
                         sqlite3_column_text(statement, 3);
-                    
+
                     auto expansion = FixExpansion(
                         (const char*)sqlite3_column_text(statement, 6));
-                    
+
                     auto group = (const char*)sqlite3_column_text(statement, 2);
                     auto id = (const char*)sqlite3_column_text(statement, 0);
-                        
+
                     if (strcmp(cardType, "Objective"))
                     {
                         auto cardName = FixCardName((const char*)
                             sqlite3_column_text(statement, 1));
-                    
+
                         addScript(
                             expansion.c_str(),
                             group,
@@ -293,17 +294,17 @@ int main(int argc, char** argv)
                     {
                         auto cardName = FixCardName((const char*)
                             sqlite3_column_text(statement, 17));
-                    
+
                         addScript(
                             expansion.c_str(),
                             group,
                             cardName.c_str(),
                             id,
                             "a");
-                        
+
                         cardName = FixCardName((const char*)
                             sqlite3_column_text(statement, 18));
-                        
+
                         addScript(
                             expansion.c_str(),
                             group,
@@ -311,7 +312,7 @@ int main(int argc, char** argv)
                             id,
                             "b");
                     }
-                    
+
                     bool writeComma = false;
 
                     for (int i = 0; i < columnCount; ++i)
@@ -325,24 +326,24 @@ int main(int argc, char** argv)
                         {
                             auto columnName = sqlite3_column_name(statement, i);
                             auto sanitized = Sanitized(text);
-                            
+
                             sql << "'";
-                            
+
                             if (writeComma) json << ",";
-                            
+
                             json << "\n    \""
                                 << columnName
                                 << "\": \"";
-                               
+
                             writeComma = true;
-                                
+
                             for (auto c : sanitized)
                             {
                                 if (c == '\'')
                                     sql << "''";
                                 else
                                     sql << c;
-                                
+
                                 if (c == '"')
                                     json << "\\\"";
                                 else if (c == '\n')
@@ -350,10 +351,10 @@ int main(int argc, char** argv)
                                 else
                                     json << c;
                             }
-                            
+
                             sql << "'";
                             json << "\"";
-                            
+
                         }
                         else
                         {
@@ -366,7 +367,7 @@ int main(int argc, char** argv)
                 }
 
                 sql << ";\n";
-                
+
                 cout << "read " << rowCount << " rows" << endl;
 
                 sqlite3_finalize(statement);
@@ -376,7 +377,7 @@ int main(int argc, char** argv)
             sqlite3_close(db);
             db = nullptr;
         }
-        
+
         json << "]\n";
 
         script.close();
